@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-
+import { Clipboard, Check, RotateCw, Ban, Search, UserPlus } from 'lucide-react';
 type CustomerStatus = "ACTIVE" | "EXPIRED" | "REVOKED";
 
 type Customer = {
@@ -21,12 +21,11 @@ type Customer = {
 const planOptions = [7, 30, 90];
 
 function formatDate(value: string) {
-  const date = new Date(value);
   return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "short",
     day: "2-digit",
-  }).format(date);
+  }).format(new Date(value));
 }
 
 function statusTone(status: CustomerStatus) {
@@ -37,21 +36,23 @@ function statusTone(status: CustomerStatus) {
       return "bg-amber-100 text-amber-800";
     case "REVOKED":
       return "bg-rose-100 text-rose-800";
-    default:
-      return "bg-slate-100 text-slate-700";
   }
 }
 
 export default function DashboardClient() {
   const router = useRouter();
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [formName, setFormName] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [formPlan, setFormPlan] = useState(30);
+
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [actionId, setActionId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   async function loadCustomers() {
     setLoading(true);
@@ -60,14 +61,12 @@ export default function DashboardClient() {
       if (res.status === 401) {
         router.push("/login");
         router.refresh();
-        setLoading(false);
         return;
       }
       setError("Unable to load customers");
-      setLoading(false);
       return;
     }
-    const data = (await res.json()) as { customers: Customer[] };
+    const data = await res.json();
     setCustomers(data.customers);
     setLoading(false);
   }
@@ -77,23 +76,22 @@ export default function DashboardClient() {
   }, []);
 
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = search.toLowerCase();
     if (!term) return customers;
-    return customers.filter((customer) => {
-      return (
-        customer.name.toLowerCase().includes(term) ||
-        customer.phone?.toLowerCase().includes(term) ||
-        customer.outlineAccessUrl.toLowerCase().includes(term)
-      );
-    });
+    return customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(term) ||
+        c.phone?.toLowerCase().includes(term) ||
+        c.outlineAccessUrl.toLowerCase().includes(term)
+    );
   }, [customers, search]);
 
-  async function handleCreate(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
+  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     setActionId("create");
+
     try {
-      const res = await fetch("/api/customers", {
+      await fetch("/api/customers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -102,11 +100,7 @@ export default function DashboardClient() {
           planDays: formPlan,
         }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body?.error || "Failed to create customer");
-        return;
-      }
+
       setFormName("");
       setFormPhone("");
       setFormPlan(30);
@@ -116,247 +110,232 @@ export default function DashboardClient() {
     }
   }
 
-  async function handleRenew(customerId: string) {
-    setError("");
-    setActionId(customerId);
-    try {
-      const res = await fetch(`/api/customers/${customerId}/renew`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body?.error || "Failed to renew");
-        return;
-      }
-      await loadCustomers();
-    } finally {
-      setActionId(null);
-    }
-  }
-
-  async function handleRevoke(customerId: string) {
-    setError("");
-    setActionId(customerId);
-    try {
-      const res = await fetch(`/api/customers/${customerId}/revoke`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body?.error || "Failed to revoke");
-        return;
-      }
-      await loadCustomers();
-    } finally {
-      setActionId(null);
-    }
-  }
-
-  async function handleCopy(url: string) {
+  async function handleCopy(id: string, url: string) {
     try {
       await navigator.clipboard.writeText(url);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
     } catch {
       setError("Failed to copy key");
     }
   }
-
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
   }
 
-  return (
-    <div className="min-h-screen bg-cream text-ink">
-      <header className="border-b border-ink/10 bg-white/70 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+  async function handleRenew(id: string) {
+    setActionId(id);
+    await fetch(`/api/customers/${id}/renew`, { method: "POST" });
+    await loadCustomers();
+    setActionId(null);
+  }
+
+  async function handleRevoke(id: string) {
+    setActionId(id);
+    await fetch(`/api/customers/${id}/revoke`, { method: "POST" });
+    await loadCustomers();
+    setActionId(null);
+  }
+
+ return (
+    <div className="min-h-screen bg-[#FDFCF8] text-[#1A1A1A]">
+      <header className="sticky top-0 z-10 border-b border-black/5 bg-white/70 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-8">
           <div>
-            <p className="text-xs uppercase tracking-[0.35em] text-ink/50">
-              Outline Admin
-            </p>
-            <h1 className="text-2xl font-semibold">Dashboard</h1>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-black/40">Outline Admin</p>
+            <h1 className="text-xl font-bold tracking-tight md:text-2xl">Dashboard</h1>
           </div>
           <button
             onClick={handleLogout}
-            className="rounded-full border border-ink/15 px-4 py-2 text-sm font-semibold text-ink transition hover:border-ink/30"
+            className="rounded-full border border-black/10 px-5 py-2 text-sm font-semibold transition hover:bg-black hover:text-white"
           >
             Log out
           </button>
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
-        <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-          <div className="rounded-3xl border border-ink/10 bg-white/80 p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Customers</h2>
-            <p className="text-sm text-ink/60">
-              Track access keys, renewals, and expirations.
-            </p>
-            <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="w-full rounded-2xl border border-ink/10 bg-white px-4 py-2 text-sm outline-none transition focus:border-ink/40 focus:ring-2 focus:ring-ink/10"
-                placeholder="Search name, phone, or key"
-              />
-              <div className="text-sm text-ink/50">
-                {filtered.length} total
+      <main className="mx-auto max-w-7xl px-4 py-8 md:px-8">
+        <section className="grid gap-8 lg:grid-cols-12">
+          
+          {/* ================= CUSTOMERS SECTION (8 COLS) ================= */}
+          <div className="lg:col-span-8 order-2 lg:order-1">
+            <div className="rounded-3xl border border-black/5 bg-white p-5 shadow-sm md:p-8">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-lg font-bold">Customers</h2>
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-black/30" size={16} />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search customers..."
+                    className="w-full rounded-xl border border-black/5 bg-black/5 py-2 pl-10 pr-4 text-sm focus:border-black/20 focus:outline-none"
+                  />
+                </div>
               </div>
-            </div>
 
-            {error ? (
-              <div className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600">
-                {error}
+              {/* MOBILE LIST VIEW (Visible on small screens) */}
+              <div className="mt-6 space-y-4 md:hidden">
+                {filtered.map((c) => (
+                  <div key={c.id} className="rounded-2xl border border-black/5 bg-[#FAFAFA] p-5">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-bold text-base">{c.name}</p>
+                        <p className="text-xs text-black/50">{c.phone || "No phone"}</p>
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${statusTone(c.status)}`}>
+                        {c.status}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-4 border-y border-black/5 py-3 text-sm">
+                      <div>
+                        <p className="text-[10px] uppercase text-black/40">Plan</p>
+                        <p className="font-medium">{c.planDays} Days</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase text-black/40">Expires</p>
+                        <p className="font-medium">{formatDate(c.expiresAt)}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex gap-2">
+                      <button 
+                        onClick={() => handleCopy(c.id, c.outlineAccessUrl)}
+                        className={`flex-1 flex justify-center items-center py-2.5 rounded-xl border transition ${copiedId === c.id ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-white border-black/10"}`}
+                      >
+                        {copiedId === c.id ? <Check size={18} /> : <Clipboard size={18} />}
+                      </button>
+                      <button 
+                        onClick={() => handleRenew(c.id)}
+                        className="flex-1 flex justify-center items-center py-2.5 rounded-xl bg-black text-white"
+                      >
+                        <RotateCw size={18} />
+                      </button>
+                      <button 
+                        onClick={() => handleRevoke(c.id)}
+                        className="flex-1 flex justify-center items-center py-2.5 rounded-xl border border-rose-200 text-rose-500 bg-white"
+                      >
+                        <Ban size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ) : null}
 
-            <div className="mt-6 overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="text-xs uppercase tracking-wide text-ink/50">
-                  <tr>
-                    <th className="pb-3 pr-3">Customer</th>
-                    <th className="pb-3 pr-3">Plan</th>
-                    <th className="pb-3 pr-3">Expires</th>
-                    <th className="pb-3 pr-3">Status</th>
-                    <th className="pb-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td className="py-4 text-sm text-ink/50" colSpan={5}>
-                        Loading customers...
-                      </td>
+              {/* DESKTOP TABLE VIEW (Hidden on mobile) */}
+              <div className="mt-8 hidden md:block overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-black/5 text-left text-[10px] uppercase tracking-[0.2em] text-black/40">
+                      <th className="pb-4 font-semibold">Customer</th>
+                      <th className="pb-4 font-semibold">Plan</th>
+                      <th className="pb-4 font-semibold">Expires</th>
+                      <th className="pb-4 font-semibold">Status</th>
+                      <th className="pb-4 text-right font-semibold">Actions</th>
                     </tr>
-                  ) : filtered.length === 0 ? (
-                    <tr>
-                      <td className="py-4 text-sm text-ink/50" colSpan={5}>
-                        No customers found.
-                      </td>
-                    </tr>
-                  ) : (
-                    filtered.map((customer) => (
-                      <tr key={customer.id} className="border-t border-ink/5">
-                        <td className="py-4 pr-3 align-top">
-                          <div className="font-semibold">{customer.name}</div>
-                          <div className="text-xs text-ink/50">
-                            {customer.phone || "No phone"}
-                          </div>
-                          <div className="text-xs text-ink/40">
-                            {`${customer.outlineAccessUrl.substring(0, 50)}...`}
-                          </div>
+                  </thead>
+                  <tbody className="divide-y divide-black/5">
+                    {filtered.map((c) => (
+                      <tr key={c.id} className="group hover:bg-black/[0.02]">
+                        <td className="py-4">
+                          <p className="font-semibold text-sm">{c.name}</p>
+                          <p className="text-xs text-black/40">{c.phone}</p>
                         </td>
-                        <td className="py-4 pr-3 align-top">
-                          {customer.planDays} days
-                        </td>
-                        <td className="py-4 pr-3 align-top">
-                          {formatDate(customer.expiresAt)}
-                        </td>
-                        <td className="py-4 pr-3 align-top">
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-semibold ${statusTone(
-                              customer.status
-                            )}`}
-                          >
-                            {customer.status}
+                        <td className="py-4 text-sm">{c.planDays} days</td>
+                        <td className="py-4 text-sm">{formatDate(c.expiresAt)}</td>
+                        <td className="py-4">
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${statusTone(c.status)}`}>
+                            {c.status}
                           </span>
                         </td>
-                        <td className="py-4 align-top">
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={() =>
-                                handleCopy(customer.outlineAccessUrl)
-                              }
-                              className="rounded-full border border-ink/15 px-3 py-1 text-xs font-semibold text-ink transition hover:border-ink/30"
+                        <td className="py-4">
+                          <div className="flex justify-end gap-2">
+                            <button 
+                              onClick={() => handleCopy(c.id, c.outlineAccessUrl)}
+                              className={`p-2 rounded-lg border transition ${copiedId === c.id ? "border-emerald-500 text-emerald-600" : "border-black/10 hover:border-black/30"}`}
                             >
-                              Copy key
+                              {copiedId === c.id ? <Check size={14} /> : <Clipboard size={14} />}
                             </button>
-                            <button
-                              onClick={() => handleRenew(customer.id)}
-                              disabled={actionId === customer.id}
-                              className="rounded-full bg-ink px-3 py-1 text-xs font-semibold text-cream transition hover:opacity-90 disabled:opacity-60"
-                            >
-                              Renew
+                            <button onClick={() => handleRenew(c.id)} className="p-2 rounded-lg bg-black text-white hover:opacity-80">
+                              <RotateCw size={14} />
                             </button>
-                            <button
-                              onClick={() => handleRevoke(customer.id)}
-                              disabled={actionId === customer.id}
-                              className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 transition hover:border-rose-300 disabled:opacity-60"
-                            >
-                              Revoke
+                            <button onClick={() => handleRevoke(c.id)} className="p-2 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50">
+                              <Ban size={14} />
                             </button>
                           </div>
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
-          <form
-            onSubmit={handleCreate}
-            className="rounded-3xl border border-ink/10 bg-white/80 p-6 shadow-sm"
-          >
-            <h2 className="text-lg font-semibold">Create customer</h2>
-            <p className="text-sm text-ink/60">
-              Issue a new key and start a plan.
-            </p>
-            <div className="mt-4 space-y-4">
-              <div>
-                <label className="text-xs uppercase tracking-wide text-ink/50">
-                  Name
-                </label>
-                <input
-                  value={formName}
-                  onChange={(event) => setFormName(event.target.value)}
-                  className="mt-2 w-full rounded-2xl border border-ink/10 bg-white px-4 py-2 text-sm outline-none transition focus:border-ink/40 focus:ring-2 focus:ring-ink/10"
-                  placeholder="Customer name"
-                  required
-                />
+          {/* ================= ADD USER FORM (4 COLS) ================= */}
+          <div className="lg:col-span-4 order-1 lg:order-2">
+            <form onSubmit={handleCreate} className="sticky top-24 rounded-3xl border border-black/5 bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-6">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black text-white">
+                  <UserPlus size={16} />
+                </div>
+                <h2 className="text-lg font-bold">Add user</h2>
               </div>
-              <div>
-                <label className="text-xs uppercase tracking-wide text-ink/50">
-                  Phone (optional)
-                </label>
-                <input
-                  value={formPhone}
-                  onChange={(event) => setFormPhone(event.target.value)}
-                  className="mt-2 w-full rounded-2xl border border-ink/10 bg-white px-4 py-2 text-sm outline-none transition focus:border-ink/40 focus:ring-2 focus:ring-ink/10"
-                  placeholder="+1 555 000 0000"
-                />
-              </div>
-              <div>
-                <label className="text-xs uppercase tracking-wide text-ink/50">
-                  Plan length
-                </label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {planOptions.map((days) => (
-                    <button
-                      type="button"
-                      key={days}
-                      onClick={() => setFormPlan(days)}
-                      className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${
-                        formPlan === days
-                          ? "border-ink bg-ink text-cream"
-                          : "border-ink/15 text-ink hover:border-ink/30"
-                      }`}
-                    >
-                      {days} days
-                    </button>
-                  ))}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-black/40 mb-1 block">Full Name</label>
+                  <input
+                    required
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="Enter customer name"
+                    className="w-full rounded-xl border border-black/5 bg-black/5 px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-black/5 outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-black/40 mb-1 block">Phone Number</label>
+                  <input
+                    value={formPhone}
+                    onChange={(e) => setFormPhone(e.target.value)}
+                    maxLength={11}
+                    placeholder="09 123 456..."
+                    className="w-full rounded-xl border border-black/5 bg-black/5 px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-black/5 outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-black/40 mb-2 block">Select Plan</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {planOptions.map((days) => (
+                      <button
+                        key={days}
+                        type="button"
+                        onClick={() => setFormPlan(days)}
+                        className={`rounded-xl py-3 text-xs font-bold transition-all ${
+                          formPlan === days
+                            ? "bg-black text-white"
+                            : "bg-black/5 text-black/60 hover:bg-black/10"
+                        }`}
+                      >
+                        {days}D
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-            <button
-              type="submit"
-              disabled={actionId === "create"}
-              className="mt-6 w-full rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-cream transition hover:opacity-90 disabled:opacity-60"
-            >
-              {actionId === "create" ? "Creating..." : "Create customer"}
-            </button>
-          </form>
+
+              <button
+                disabled={actionId === "create"}
+                className="mt-8 w-full rounded-xl bg-black py-4 text-sm font-bold text-white transition-transform active:scale-[0.98] disabled:opacity-50"
+              >
+                {actionId === "create" ? "Processing..." : "Create Access Key"}
+              </button>
+            </form>
+          </div>
         </section>
       </main>
     </div>
