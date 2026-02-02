@@ -3,14 +3,10 @@ services:
     container_name: outline-admin
     build: .
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
-      OUTLINE_API_URL: ${OUTLINE_API_URL}
-      OUTLINE_CERT_SHA256: ${OUTLINE_CERT_SHA256}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      SESSION_SECRET: ${SESSION_SECRET}
-      CRON_SECRET: ${CRON_SECRET}
+      - NODE_ENV=production
     expose:
       - "3000"
 
