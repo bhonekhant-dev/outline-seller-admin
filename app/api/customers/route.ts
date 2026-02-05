@@ -35,7 +35,7 @@ if (expiredActive.length > 0) {
   );
 
   await prisma.customer.updateMany({
-    where: { id: { in: expiredActive.map((c) => c.id) } },
+    where: { id: { in: expiredActive.map((c: { id: string }) => c.id) } },
     data: { status: "EXPIRED" },
   });
 }
