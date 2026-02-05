@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import  prisma  from "@/lib/prisma";
 import { outlineFetch } from "@/lib/outline";
+import { nowInMyanmar } from "@/lib/myanmar-time";
 
 export async function POST(req: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -9,11 +10,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const now = new Date();
+  // Use Myanmar timezone for consistent expiry checking
+  const now = nowInMyanmar();
+  // Convert back to UTC for database comparison since expiresAt is stored in UTC
+  const nowUTC = new Date(now.getTime() - 6.5 * 60 * 60 * 1000);
+  
   const expiring = await prisma.customer.findMany({
     where: {
       status: "ACTIVE",
-      expiresAt: { lt: now },
+      expiresAt: { lt: nowUTC },
     },
   });
 

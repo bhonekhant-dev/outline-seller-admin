@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clipboard, Check, RotateCw, Ban, Search, UserPlus, Pencil, Trash2 } from 'lucide-react';
+import { formatMyanmarDate, isExpiredInMyanmar } from "@/lib/myanmar-time";
+import DevicePolicyManager from "@/app/components/DevicePolicyManager";
 type CustomerStatus = "ACTIVE" | "EXPIRED" | "REVOKED";
 
 type Customer = {
@@ -19,14 +21,6 @@ type Customer = {
 };
 
 const planOptions = [7, 30, 90];
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-MM", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  }).format(new Date(value));
-}
 
 function statusTone(status: CustomerStatus) {
   switch (status) {
@@ -53,10 +47,11 @@ export default function DashboardClient() {
   const [error, setError] = useState("");
   const [actionId, setActionId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const isExpired = (customer: Customer) =>
     customer.status === "EXPIRED" ||
-    new Date(customer.expiresAt).getTime() <= Date.now();
+    isExpiredInMyanmar(new Date(customer.expiresAt));
 
   async function loadCustomers() {
     setLoading(true);
@@ -250,7 +245,7 @@ export default function DashboardClient() {
                       </div>
                       <div>
                         <p className="text-[10px] uppercase text-black/40">Expires</p>
-                        <p className="font-medium">{formatDate(c.expiresAt)}</p>
+                        <p className="font-medium">{formatMyanmarDate(c.expiresAt)}</p>
                       </div>
                     </div>
 
@@ -278,6 +273,13 @@ export default function DashboardClient() {
                         className="flex-1 flex justify-center items-center py-2.5 rounded-xl border border-black/10 text-black bg-white"
                       >
                         <Pencil size={18} />
+                      </button>
+                      <button
+                        onClick={() => setSelectedCustomer(c)}
+                        className="flex-1 flex justify-center items-center py-2.5 rounded-xl border border-blue-200 text-blue-500 bg-white"
+                        title="Manage Device Policy"
+                      >
+                        🔒
                       </button>
                       {isExpired(c) ? (
                         <button
@@ -312,7 +314,7 @@ export default function DashboardClient() {
                           <p className="text-xs text-black/40">{c.phone || "No phone"}</p>
                         </td>
                         <td className="py-4 text-sm">{c.planDays} days</td>
-                        <td className="py-4 text-sm">{formatDate(c.expiresAt)}</td>
+                        <td className="py-4 text-sm">{formatMyanmarDate(c.expiresAt)}</td>
                         <td className="py-4">
                           <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${statusTone(c.status)}`}>
                             {c.status}
@@ -335,6 +337,13 @@ export default function DashboardClient() {
                             <button onClick={() => handleEdit(c)} className="p-2 rounded-lg border border-black/10 text-black hover:bg-black/5">
                               <Pencil size={14} />
                             </button>
+                            {/*<button */}
+                            {/*  onClick={() => setSelectedCustomer(c)} */}
+                            {/*  className="p-2 rounded-lg border border-blue-200 text-blue-500 hover:bg-blue-50"*/}
+                            {/*  title="Manage Device Policy"*/}
+                            {/*>*/}
+                            {/*  🔒*/}
+                            {/*</button>*/}
                             {isExpired(c) ? (
                               <button onClick={() => handleDelete(c)} className="p-2 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50">
                                 <Trash2 size={14} />
@@ -414,6 +423,36 @@ export default function DashboardClient() {
           </div>
         </section>
       </main>
+
+      {/* Device Policy Manager Modal */}
+      {/*{selectedCustomer && (*/}
+      {/*  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">*/}
+      {/*    <div className="mx-4 w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">*/}
+      {/*      <div className="mb-4 flex items-center justify-between">*/}
+      {/*        <h2 className="text-lg font-bold">Device Policy</h2>*/}
+      {/*        <button*/}
+      {/*          onClick={() => setSelectedCustomer(null)}*/}
+      {/*          className="rounded-full p-2 hover:bg-black/5"*/}
+      {/*        >*/}
+      {/*          ✕*/}
+      {/*        </button>*/}
+      {/*      </div>*/}
+      {/*      */}
+      {/*      <div className="mb-4">*/}
+      {/*        <p className="font-semibold">{selectedCustomer.name}</p>*/}
+      {/*        <p className="text-sm text-black/60">ID: {selectedCustomer.outlineKeyId}</p>*/}
+      {/*      </div>*/}
+
+      {/*      <DevicePolicyManager*/}
+      {/*        customer={selectedCustomer}*/}
+      {/*        onUpdate={() => {*/}
+      {/*          loadCustomers();*/}
+      {/*          setSelectedCustomer(null);*/}
+      {/*        }}*/}
+      {/*      />*/}
+      {/*    </div>*/}
+      {/*  </div>*/}
+      {/*)}*/}
     </div>
   );
 }

@@ -2,20 +2,21 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { outlineFetch } from "@/lib/outline";
 import { requireSession, unauthorizedResponse } from "@/lib/auth";
+import { calculateExpiry, nowInMyanmar } from "@/lib/myanmar-time";
 
-function toExpiry(planDays: number, from = new Date()) {
-  const ms = planDays * 24 * 60 * 60 * 1000;
-  return new Date(from.getTime() + ms);
-}
 
 export async function GET() {
   // ✅ requireSession is typically sync in App Router libs
   const session = requireSession();
   if (!session) return unauthorizedResponse();
 
-  const now = new Date();
+  // Use Myanmar timezone for consistent expiry checking
+  const now = nowInMyanmar();
+  // Convert back to UTC for database comparison since expiresAt is stored in UTC
+  const nowUTC = new Date(now.getTime() - 6.5 * 60 * 60 * 1000);
+  
   const expiredActive = await prisma.customer.findMany({
-    where: { status: "ACTIVE", expiresAt: { lte: now } },
+    where: { status: "ACTIVE", expiresAt: { lte: nowUTC } },
     select: { id: true, outlineKeyId: true },
   });
 
@@ -80,7 +81,7 @@ export async function POST(req: Request) {
     // IMPORTANT: do NOT set Content-Type manually for FormData
   });
 
-  const expiresAt = toExpiry(planDays);
+  const expiresAt = calculateExpiry(planDays);
 
   const customer = await prisma.customer.create({
     data: {

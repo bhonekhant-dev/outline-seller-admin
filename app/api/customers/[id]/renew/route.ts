@@ -2,11 +2,9 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { outlineFetch } from "@/lib/outline";
 import { requireSession, unauthorizedResponse } from "@/lib/auth";
+import { extendExpiry } from "@/lib/myanmar-time";
 
-function extendExpiry(current: Date, planDays: number) {
-  const base = current.getTime() > Date.now() ? current : new Date();
-  return new Date(base.getTime() + planDays * 24 * 60 * 60 * 1000);
-}
+
 
 export async function POST(
   req: Request,
