@@ -13,6 +13,31 @@ export async function GET() {
   const session = requireSession();
   if (!session) return unauthorizedResponse();
 
+  const now = new Date();
+  const expiredActive = await prisma.customer.findMany({
+    where: { status: "ACTIVE", expiresAt: { lte: now } },
+    select: { id: true, outlineKeyId: true },
+  });
+
+  if (expiredActive.length > 0) {
+    await Promise.all(
+      expiredActive.map(async (customer) => {
+        try {
+          await outlineFetch(`/access-keys/${customer.outlineKeyId}`, {
+            method: "DELETE",
+          });
+        } catch {
+          // If the key was already removed, continue.
+        }
+      })
+    );
+
+    await prisma.customer.updateMany({
+      where: { id: { in: expiredActive.map((c) => c.id) } },
+      data: { status: "EXPIRED" },
+    });
+  }
+
   const customers = await prisma.customer.findMany({
     orderBy: { createdAt: "desc" },
   });

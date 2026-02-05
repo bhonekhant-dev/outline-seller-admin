@@ -9,7 +9,7 @@ function extendExpiry(current: Date, planDays: number) {
 }
 
 export async function POST(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ id: string }> } // 1. Update Type to Promise
 ) {
   if (!(await requireSession())) return unauthorizedResponse();
@@ -17,10 +17,17 @@ export async function POST(
   // 2. Await the params to get the ID
   const { id } = await context.params;
 
+  const body = await req.json().catch(() => null);
+
   const customer = await prisma.customer.findUnique({ where: { id } });
   if (!customer) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  const requestedPlanDays = Number(body?.planDays);
+  const planDays = Number.isFinite(requestedPlanDays) && requestedPlanDays > 0
+    ? requestedPlanDays
+    : customer.planDays;
 
   // Create new key
   const createRes = await outlineFetch("/access-keys", { method: "POST" });
@@ -49,13 +56,14 @@ export async function POST(
     throw error;
   }
 
-  const expiresAt = extendExpiry(customer.expiresAt, customer.planDays);
+  const expiresAt = extendExpiry(customer.expiresAt, planDays);
 
   const updated = await prisma.customer.update({
     where: { id: customer.id },
     data: {
       expiresAt,
       status: "ACTIVE",
+      planDays,
       outlineKeyId: String(created.id),
       outlineAccessUrl: created.accessUrl,
     },
@@ -69,6 +77,7 @@ export async function POST(
         oldKeyId: customer.outlineKeyId,
         newKeyId: String(created.id),
         newExpiresAt: expiresAt.toISOString(),
+        planDays,
       },
     },
   });

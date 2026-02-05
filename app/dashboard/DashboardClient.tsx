@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clipboard, Check, RotateCw, Ban, Search, UserPlus } from 'lucide-react';
+import { Clipboard, Check, RotateCw, Ban, Search, UserPlus, Pencil, Trash2 } from 'lucide-react';
 type CustomerStatus = "ACTIVE" | "EXPIRED" | "REVOKED";
 
 type Customer = {
@@ -21,7 +21,7 @@ type Customer = {
 const planOptions = [7, 30, 90];
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("en-MM", {
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -53,6 +53,10 @@ export default function DashboardClient() {
   const [error, setError] = useState("");
   const [actionId, setActionId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const isExpired = (customer: Customer) =>
+    customer.status === "EXPIRED" ||
+    new Date(customer.expiresAt).getTime() <= Date.now();
 
   async function loadCustomers() {
     setLoading(true);
@@ -125,9 +129,22 @@ export default function DashboardClient() {
     router.refresh();
   }
 
-  async function handleRenew(id: string) {
-    setActionId(id);
-    await fetch(`/api/customers/${id}/renew`, { method: "POST" });
+  async function handleRenew(customer: Customer) {
+    const input = window.prompt("Plan days to extend", String(customer.planDays));
+    if (input === null) return;
+    const planDays = Number(input);
+    if (!Number.isFinite(planDays) || planDays <= 0) {
+      setError("Plan days must be a positive number");
+      return;
+    }
+
+    setActionId(customer.id);
+    const res = await fetch(`/api/customers/${customer.id}/renew`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planDays }),
+    });
+    if (!res.ok) setError("Failed to renew customer");
     await loadCustomers();
     setActionId(null);
   }
@@ -135,6 +152,37 @@ export default function DashboardClient() {
   async function handleRevoke(id: string) {
     setActionId(id);
     await fetch(`/api/customers/${id}/revoke`, { method: "POST" });
+    await loadCustomers();
+    setActionId(null);
+  }
+
+  async function handleEdit(customer: Customer) {
+    const name = window.prompt("Full name", customer.name);
+    if (name === null) return;
+    const phone = window.prompt("Phone number", customer.phone ?? "");
+    if (phone === null) return;
+
+    setActionId(customer.id);
+    const res = await fetch(`/api/customers/${customer.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name.trim(),
+        phone: phone.trim() || null,
+      }),
+    });
+    if (!res.ok) setError("Failed to update customer");
+    await loadCustomers();
+    setActionId(null);
+  }
+
+  async function handleDelete(customer: Customer) {
+    if (!confirm("Delete this customer? This cannot be undone.")) return;
+    setActionId(customer.id);
+    const res = await fetch(`/api/customers/${customer.id}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) setError("Failed to delete customer");
     await loadCustomers();
     setActionId(null);
   }
@@ -158,7 +206,7 @@ export default function DashboardClient() {
 
       <main className="mx-auto max-w-7xl px-4 py-8 md:px-8">
         <section className="grid gap-8 lg:grid-cols-12">
-          
+
           {/* ================= CUSTOMERS SECTION (8 COLS) ================= */}
           <div className="lg:col-span-8 order-2 lg:order-1">
             <div className="rounded-3xl border border-black/5 bg-white p-5 shadow-sm md:p-8">
@@ -174,6 +222,12 @@ export default function DashboardClient() {
                   />
                 </div>
               </div>
+
+              {error ? (
+                <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                  {error}
+                </p>
+              ) : null}
 
               {/* MOBILE LIST VIEW (Visible on small screens) */}
               <div className="mt-6 space-y-4 md:hidden">
@@ -201,24 +255,38 @@ export default function DashboardClient() {
                     </div>
 
                     <div className="mt-4 flex gap-2">
-                      <button 
+                      <button
                         onClick={() => handleCopy(c.id, c.outlineAccessUrl)}
                         className={`flex-1 flex justify-center items-center py-2.5 rounded-xl border transition ${copiedId === c.id ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-white border-black/10"}`}
                       >
                         {copiedId === c.id ? <Check size={18} /> : <Clipboard size={18} />}
                       </button>
-                      <button 
-                        onClick={() => handleRenew(c.id)}
+                      <button
+                        onClick={() => handleRenew(c)}
                         className="flex-1 flex justify-center items-center py-2.5 rounded-xl bg-black text-white"
                       >
                         <RotateCw size={18} />
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleRevoke(c.id)}
                         className="flex-1 flex justify-center items-center py-2.5 rounded-xl border border-rose-200 text-rose-500 bg-white"
                       >
                         <Ban size={18} />
                       </button>
+                      <button
+                        onClick={() => handleEdit(c)}
+                        className="flex-1 flex justify-center items-center py-2.5 rounded-xl border border-black/10 text-black bg-white"
+                      >
+                        <Pencil size={18} />
+                      </button>
+                      {isExpired(c) ? (
+                        <button
+                          onClick={() => handleDelete(c)}
+                          className="flex-1 flex justify-center items-center py-2.5 rounded-xl border border-rose-200 text-rose-500 bg-white"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -241,7 +309,7 @@ export default function DashboardClient() {
                       <tr key={c.id} className="group hover:bg-black/[0.02]">
                         <td className="py-4">
                           <p className="font-semibold text-sm">{c.name}</p>
-                          <p className="text-xs text-black/40">{c.phone}</p>
+                          <p className="text-xs text-black/40">{c.phone || "No phone"}</p>
                         </td>
                         <td className="py-4 text-sm">{c.planDays} days</td>
                         <td className="py-4 text-sm">{formatDate(c.expiresAt)}</td>
@@ -252,18 +320,26 @@ export default function DashboardClient() {
                         </td>
                         <td className="py-4">
                           <div className="flex justify-end gap-2">
-                            <button 
+                            <button
                               onClick={() => handleCopy(c.id, c.outlineAccessUrl)}
                               className={`p-2 rounded-lg border transition ${copiedId === c.id ? "border-emerald-500 text-emerald-600" : "border-black/10 hover:border-black/30"}`}
                             >
                               {copiedId === c.id ? <Check size={14} /> : <Clipboard size={14} />}
                             </button>
-                            <button onClick={() => handleRenew(c.id)} className="p-2 rounded-lg bg-black text-white hover:opacity-80">
+                            <button onClick={() => handleRenew(c)} className="p-2 rounded-lg bg-black text-white hover:opacity-80">
                               <RotateCw size={14} />
                             </button>
                             <button onClick={() => handleRevoke(c.id)} className="p-2 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50">
                               <Ban size={14} />
                             </button>
+                            <button onClick={() => handleEdit(c)} className="p-2 rounded-lg border border-black/10 text-black hover:bg-black/5">
+                              <Pencil size={14} />
+                            </button>
+                            {isExpired(c) ? (
+                              <button onClick={() => handleDelete(c)} className="p-2 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50">
+                                <Trash2 size={14} />
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
