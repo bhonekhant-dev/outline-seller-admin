@@ -14,30 +14,31 @@ export async function GET() {
   const now = nowInMyanmar();
   // Convert back to UTC for database comparison since expiresAt is stored in UTC
   const nowUTC = new Date(now.getTime() - 6.5 * 60 * 60 * 1000);
-  
+
   const expiredActive = await prisma.customer.findMany({
     where: { status: "ACTIVE", expiresAt: { lte: nowUTC } },
     select: { id: true, outlineKeyId: true },
   });
 
-  if (expiredActive.length > 0) {
-    await Promise.all(
-      expiredActive.map(async (customer) => {
+if (expiredActive.length > 0) {
+  await Promise.all(
+      expiredActive.map(async (customer: { id: string; outlineKeyId: string }) => {
         try {
+          // outlineKeyId က string ဖြစ်နေဖို့ သေချာအောင် လုပ်ပါ
           await outlineFetch(`/access-keys/${customer.outlineKeyId}`, {
             method: "DELETE",
           });
-        } catch {
-          // If the key was already removed, continue.
+        } catch (error) {
+          console.error(`Failed to delete key for customer ${customer.id}:`, error);
         }
       })
-    );
+  );
 
-    await prisma.customer.updateMany({
-      where: { id: { in: expiredActive.map((c) => c.id) } },
-      data: { status: "EXPIRED" },
-    });
-  }
+  await prisma.customer.updateMany({
+    where: { id: { in: expiredActive.map((c) => c.id) } },
+    data: { status: "EXPIRED" },
+  });
+}
 
   const customers = await prisma.customer.findMany({
     orderBy: { createdAt: "desc" },
